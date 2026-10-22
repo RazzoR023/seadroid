@@ -43,7 +43,7 @@ public abstract class BaseOkHttpClient {
         List<Interceptor> interceptors = new ArrayList<>();
 
         if (specialAccount != null && !TextUtils.isEmpty(specialAccount.token)) {
-            interceptors.add(new TokenInterceptor(specialAccount.token));
+            interceptors.add(new TokenInterceptor(specialAccount.token, specialAccount.getServerDomainName()));
         } else {
             interceptors.add(new TokenInterceptor());
         }
@@ -64,6 +64,10 @@ public abstract class BaseOkHttpClient {
             }
         });
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.HEADERS);
+        // logs are written to files, keep credentials out of them
+        loggingInterceptor.redactHeader("Authorization");
+        loggingInterceptor.redactHeader("Cookie");
+        loggingInterceptor.redactHeader("Set-Cookie");
         interceptors.add(loggingInterceptor);
         return interceptors;
     }

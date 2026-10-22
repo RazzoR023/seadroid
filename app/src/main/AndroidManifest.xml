@@ -71,6 +71,11 @@
         android:theme="@style/App.Theme"
         tools:targetApi="36">
 
+        <!-- crash reports go to a third party, keep them off -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
+
         <activity
             android:name=".ui.SplashActivity"
             android:exported="true"

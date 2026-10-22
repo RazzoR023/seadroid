@@ -27,7 +27,6 @@ import androidx.lifecycle.ViewModelProvider;
 import com.blankj.utilcode.util.ActivityUtils;
 import com.blankj.utilcode.util.NetworkUtils;
 import com.google.android.material.navigation.NavigationBarView;
-import com.google.firebase.crashlytics.FirebaseCrashlytics;
 import com.seafile.seadroid2.R;
 import com.seafile.seadroid2.account.Account;
 import com.seafile.seadroid2.account.SupportAccountManager;
@@ -98,8 +97,6 @@ public class MainActivity extends BaseActivity {
 
         initSettings();
 
-        initFireBase();
-
         initOnBackPressedDispatcher();
 
         resetOverflowIcon();
@@ -152,14 +149,6 @@ public class MainActivity extends BaseActivity {
 
     private void initSettings() {
         Settings.initUserSettings();
-    }
-
-    private void initFireBase() {
-        Account account = SupportAccountManager.getInstance().getCurrentAccount();
-        if (account != null) {
-            FirebaseCrashlytics crashlytics = FirebaseCrashlytics.getInstance();
-            crashlytics.setUserId(account.getSignature());
-        }
     }
 
     private long lastBackTs;

@@ -36,7 +36,7 @@ import com.seafile.seadroid2.account.Account;
 import com.seafile.seadroid2.account.SupportAccountManager;
 import com.seafile.seadroid2.databinding.ActivityExoPlayerBinding;
 import com.seafile.seadroid2.framework.http.HttpIO;
-import com.seafile.seadroid2.framework.http.UnsafeOkHttpClient;
+import com.seafile.seadroid2.framework.http.CurrentAccountOkHttpClient;
 import com.seafile.seadroid2.framework.util.Toasts;
 import com.seafile.seadroid2.preferences.Settings;
 import com.seafile.seadroid2.ui.base.BaseActivityWithVM;
@@ -460,7 +460,7 @@ public class CustomExoVideoPlayerActivity extends BaseActivityWithVM<PlayerViewM
 
         //new: use OkHttp
         Account account = SupportAccountManager.getInstance().getCurrentAccount();
-        OkHttpClient okHttpClient = new UnsafeOkHttpClient(account).getOkClient();
+        OkHttpClient okHttpClient = new CurrentAccountOkHttpClient(account).getOkClient();
 
         OkHttpDataSource.Factory okHttpFactory = new OkHttpDataSource.Factory(okHttpClient)
                 .setUserAgent(userAgent);
