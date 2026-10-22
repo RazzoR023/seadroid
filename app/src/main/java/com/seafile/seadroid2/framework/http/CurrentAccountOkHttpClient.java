@@ -1,85 +1,59 @@
-
 package com.seafile.seadroid2.framework.http;
 
 import com.blankj.utilcode.util.CollectionUtils;
 import com.seafile.seadroid2.account.Account;
+import com.seafile.seadroid2.ssl.CurrentAccountTrustManager;
 
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
 import okhttp3.ConnectionSpec;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 
-public class UnsafeOkHttpClient extends BaseOkHttpClient {
+/**
+ * A client for loads that may leave the account's server, like images and video.
+ * Certificates are checked by {@link CurrentAccountTrustManager}, hostnames by OkHttp.
+ */
+public class CurrentAccountOkHttpClient extends BaseOkHttpClient {
     private final List<Interceptor> _interceptors = new ArrayList<>();
-    public UnsafeOkHttpClient() {
+    public CurrentAccountOkHttpClient() {
         super(null);
 
         _interceptors.clear();
         _interceptors.addAll(getInterceptors());
     }
-    public UnsafeOkHttpClient(Account account) {
+    public CurrentAccountOkHttpClient(Account account) {
         super(account);
 
         _interceptors.clear();
         _interceptors.addAll(getInterceptors());
     }
 
-    private final TrustManager[] trustAllCerts = new TrustManager[]{new X509TrustManager() {
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        }
-
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            return new X509Certificate[]{};
-        }
-    }
-    };
+    private final CurrentAccountTrustManager trustManager = new CurrentAccountTrustManager();
 
     public OkHttpClient.Builder getBuilder() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
 
 
         try {
-            // Install the all-trusting trust manager
             final SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-            // Create an ssl socket factory with our all-trusting manager
-            final SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+            sslContext.init(null, new TrustManager[]{trustManager}, new java.security.SecureRandom());
 
-            builder.sslSocketFactory(sslSocketFactory, (X509TrustManager) trustAllCerts[0]);
+            builder.sslSocketFactory(sslContext.getSocketFactory(), trustManager);
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         builder.connectionSpecs(Arrays.asList(
                 ConnectionSpec.MODERN_TLS,
-                ConnectionSpec.COMPATIBLE_TLS,
                 ConnectionSpec.CLEARTEXT));
         builder.cache(cache);
-        builder.hostnameVerifier(new HostnameVerifier() {
-            @Override
-            public boolean verify(String hostname, SSLSession session) {
-                return true;
-            }
-        });
         //cache control
 //        builder.interceptors().add(REWRITE_CACHE_CONTROL_INTERCEPTOR);
 //        builder.networkInterceptors().add(REWRITE_CACHE_CONTROL_INTERCEPTOR);

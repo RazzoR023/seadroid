@@ -16,6 +16,7 @@ import okhttp3.Response;
 
 public class TokenInterceptor implements Interceptor {
     private String authToken = null;
+    private String serverHost = null;
 
     /**
      * user default account token
@@ -26,20 +27,22 @@ public class TokenInterceptor implements Interceptor {
     }
 
     /**
-     * user custom account token
+     * user custom account token, only sent to serverHost
      *
      */
-    public TokenInterceptor(String authToken) {
+    public TokenInterceptor(String authToken, String serverHost) {
         this.authToken = authToken;
+        this.serverHost = serverHost;
     }
 
     @NonNull
     @Override
     public Response intercept(Chain chain) throws IOException {
-        return chain.proceed(initBuilder(chain.request().newBuilder()).build());
+        Request request = chain.request();
+        return chain.proceed(initBuilder(request.newBuilder(), request.url().host()).build());
     }
 
-    private Request.Builder initBuilder(Request.Builder builder) {
+    private Request.Builder initBuilder(Request.Builder builder, String requestHost) {
 //        builder.addHeader("Content-Type", "application/json");
         builder.addHeader("Accept", "application/json");
         builder.addHeader("charset", "utf-8");
@@ -47,11 +50,20 @@ public class TokenInterceptor implements Interceptor {
         builder.addHeader("User-Agent", Constants.UA.SEAFILE_ANDROID_UA);
 
         String token = authToken;
+        String host = serverHost;
         if (TextUtils.isEmpty(token)) {
             HttpIO httpIO = HttpManager.getCurrentLoggedHttp();
             if (httpIO != null) {
                 token = httpIO.getCurrentToken();
+                if (httpIO.getAccount() != null) {
+                    host = httpIO.getAccount().getServerDomainName();
+                }
             }
+        }
+
+        // never hand the token to other hosts, e.g. external images
+        if (!TextUtils.isEmpty(host) && !host.equalsIgnoreCase(requestHost)) {
+            return builder;
         }
 
         if (!TextUtils.isEmpty(token)) {

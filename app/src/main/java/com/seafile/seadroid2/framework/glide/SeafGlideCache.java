@@ -13,7 +13,7 @@ import com.bumptech.glide.load.engine.cache.DiskLruCacheFactory;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.module.AppGlideModule;
 import com.seafile.seadroid2.framework.datastore.StorageManager;
-import com.seafile.seadroid2.framework.http.UnsafeOkHttpClient;
+import com.seafile.seadroid2.framework.http.CurrentAccountOkHttpClient;
 import com.seafile.seadroid2.framework.util.SLogs;
 
 import java.io.File;
@@ -52,8 +52,8 @@ public class SeafGlideCache extends AppGlideModule {
 
 
     private OkHttpClient getClient() {
-        UnsafeOkHttpClient unsafeOkHttpClient = new UnsafeOkHttpClient();
-        OkHttpClient.Builder builder = unsafeOkHttpClient.getBuilder();
+        CurrentAccountOkHttpClient httpClient = new CurrentAccountOkHttpClient();
+        OkHttpClient.Builder builder = httpClient.getBuilder();
         builder.followRedirects(true);
         return builder.build();
     }
