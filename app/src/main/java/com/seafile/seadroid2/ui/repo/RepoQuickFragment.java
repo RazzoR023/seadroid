@@ -126,6 +126,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -1914,36 +1915,79 @@ public class RepoQuickFragment extends BaseFragmentWithVM<RepoViewModel> {
 
         //close action mode firstly
         closeActionMode();
+        // links can't be shared for multiple files, so send them directly
+        if (objs.size() > 1) {
+            List<DirentModel> files = new ArrayList<>();
+            for (BaseModel obj : objs) {
+                if (obj instanceof DirentModel dirent && !dirent.isDir()) {
+                    files.add(dirent);
+                }
+            }
+            sendFiles(files);
+            return;
+        }
+
         BaseModel baseModel = objs.get(0);
         if (baseModel instanceof RepoModel repoModel) {
             WidgetUtils.showRepoShareLinkDialog(requireContext(), getChildFragmentManager(), repoModel);
         } else if (baseModel instanceof DirentModel direntModel) {
             MaterialAlertDialogBuilder mBuilder = new MaterialAlertDialogBuilder(requireContext());
 
-            boolean inChina = Utils.isInChina();
-            String[] strings;
-
             //if user in China, system add WeChat share
-            if (inChina) {
-                strings = getResources().getStringArray(R.array.file_action_share_array_zh);
-            } else {
-                strings = getResources().getStringArray(R.array.file_action_share_array);
+            List<String> options = new ArrayList<>(Arrays.asList(getResources().getStringArray(
+                    Utils.isInChina() ? R.array.file_action_share_array_zh : R.array.file_action_share_array)));
+
+            // folders can only be shared as links
+            if (direntModel.isDir()) {
+                options.remove(getString(R.string.file_action_send_files));
             }
 
+            String[] strings = options.toArray(new String[0]);
             mBuilder.setItems(strings, (dialog, which) -> {
-                if (!inChina) {
-                    which++;
-                }
-
-                if (which == 0) {
+                String option = strings[which];
+                if (TextUtils.equals(option, getString(R.string.file_action_send_files))) {
+                    sendFiles(Collections.singletonList(direntModel));
+                } else if (TextUtils.equals(option, getString(R.string.file_action_share_wechat))) {
                     shareFile(direntModel);
-                } else if (which == 1) {
+                } else if (TextUtils.equals(option, getString(R.string.file_action_share_link))) {
                     WidgetUtils.showCreateShareLinkDialog(requireContext(), getChildFragmentManager(), direntModel, false);
-                } else if (which == 2) {
+                } else if (TextUtils.equals(option, getString(R.string.file_action_share_encrypt))) {
                     WidgetUtils.showCreateShareLinkDialog(requireContext(), getChildFragmentManager(), direntModel, true);
                 }
             }).show();
         }
+    }
+
+    /**
+     * Download the files if the local copies are missing or outdated, then hand them
+     * to the app the user picks from the system share sheet.
+     */
+    private void sendFiles(List<DirentModel> dirents) {
+        if (CollectionUtils.isEmpty(dirents)) {
+            return;
+        }
+
+        List<File> localFiles = new ArrayList<>();
+        for (DirentModel dirent : dirents) {
+            File local = getLocalDestinationFile(dirent.repo_id, dirent.repo_name, dirent.full_path);
+            if (!TextUtils.equals(dirent.id, dirent.local_file_id) || !local.exists()) {
+                break;
+            }
+            localFiles.add(local);
+        }
+
+        if (localFiles.size() == dirents.size()) {
+            WidgetUtils.sendFiles(requireContext(), localFiles);
+            return;
+        }
+
+        if (!NetworkUtils.isConnected()) {
+            Toasts.show(R.string.network_error);
+            return;
+        }
+
+        Intent intent = FileActivity.startForSend(requireActivity(), dirents);
+        fileActivityLauncher.launch(intent);
     }
 
     private void shareFile(DirentModel dirent) {
@@ -2227,6 +2271,19 @@ public class RepoQuickFragment extends BaseFragmentWithVM<RepoViewModel> {
                 } else if (TextUtils.equals(FileReturnActionEnum.SHARE.name(), action)) {
 
                     WidgetUtils.shareFileToWeChat(RepoQuickFragment.this, destinationFile);
+
+                } else if (TextUtils.equals(FileReturnActionEnum.SEND_FILES.name(), action)) {
+
+                    List<String> paths = data.getStringArrayListExtra("destination_paths");
+                    if (CollectionUtils.isEmpty(paths)) {
+                        return;
+                    }
+
+                    List<File> files = new ArrayList<>();
+                    for (String path : paths) {
+                        files.add(new File(path));
+                    }
+                    WidgetUtils.sendFiles(requireContext(), files);
 
                 } else if (TextUtils.equals(FileReturnActionEnum.DOWNLOAD_VIDEO.name(), action)) {
 

@@ -40,6 +40,8 @@ import com.seafile.seadroid2.ui.dialog_fragment.BottomSheetPasswordDialogFragmen
 import com.seafile.seadroid2.ui.dialog_fragment.listener.OnResultListener;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.reactivex.functions.Consumer;
 
@@ -56,6 +58,11 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
 
     private DirentModel direntModel;
     private Account account;
+
+    // SEND_FILES downloads several files in a row
+    private final List<DirentModel> pendingDirents = new ArrayList<>();
+    private final ArrayList<String> downloadedPaths = new ArrayList<>();
+    private int totalCount = 1;
 
 
     public static Intent startFromStarred(Context context, StarredModel model, FileReturnActionEnum actionEnum) {
@@ -78,6 +85,14 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
         starter.putExtra("action", actionEnum.name());
         //
         TransportHolder.get().put("dirent", direntModel);
+        return starter;
+    }
+
+    public static Intent startForSend(Context context, List<DirentModel> dirents) {
+        Intent starter = new Intent(context, FileActivity.class);
+        starter.putExtra("action", FileReturnActionEnum.SEND_FILES.name());
+        //
+        TransportHolder.get().put("dirents", new ArrayList<>(dirents));
         return starter;
     }
 
@@ -119,7 +134,15 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
 
         action = intent.getStringExtra("action");
 
-        direntModel = TransportHolder.get().get("dirent");
+        List<DirentModel> dirents = TransportHolder.get().get("dirents");
+        TransportHolder.get().remove("dirents");
+        if (dirents != null && !dirents.isEmpty()) {
+            pendingDirents.addAll(dirents);
+            totalCount = dirents.size();
+            direntModel = pendingDirents.remove(0);
+        } else {
+            direntModel = TransportHolder.get().get("dirent");
+        }
         TransportHolder.get().remove("dirent");
 
         if (null == direntModel) {
@@ -129,18 +152,36 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
             return;
         }
 
-        repoId = direntModel.repo_id;
-
-        destinationFile = getLocalDestinationFile(repoId, direntModel.repo_name, direntModel.full_path);
+        bindDirent(direntModel);
         account = SupportAccountManager.getInstance().getCurrentAccount();
     }
 
-    private void initView(String titleBarName) {
+    private void bindDirent(DirentModel dirent) {
+        direntModel = dirent;
+        repoId = dirent.repo_id;
+        destinationFile = getLocalDestinationFile(repoId, dirent.repo_name, dirent.full_path);
+    }
+
+    private void bindFileView(String titleBarName) {
         binding.fileName.setText(titleBarName);
         binding.progressBar.setIndeterminate(true);
+        binding.progressText.setText(null);
 
         // icon
         binding.fileIcon.setImageResource(Icons.getFileIcon(titleBarName));
+
+        if (getSupportActionBar() != null) {
+            if (totalCount > 1) {
+                int current = totalCount - pendingDirents.size();
+                getSupportActionBar().setTitle(getString(R.string.send_files_progress, current, totalCount));
+            } else {
+                getSupportActionBar().setTitle(titleBarName);
+            }
+        }
+    }
+
+    private void initView(String titleBarName) {
+        bindFileView(titleBarName);
 
         binding.opCancel.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -156,10 +197,6 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
                 cancelDownload();
             }
         });
-
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle(titleBarName);
-        }
 
         getOnBackPressedDispatcher().addCallback(new OnBackPressedCallback(true) {
             @Override
@@ -200,6 +237,14 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
     }
 
     private void loadData() {
+        // an up-to-date local copy is good enough for sending
+        if (TextUtils.equals(FileReturnActionEnum.SEND_FILES.name(), action)
+                && TextUtils.equals(direntModel.id, direntModel.local_file_id)
+                && destinationFile.exists()) {
+            onFileDownloaded(destinationFile, false);
+            return;
+        }
+
         getViewModel().loadFileDetail(repoId, direntModel.full_path, new Consumer<DirentFileModel>() {
             @Override
             public void accept(DirentFileModel direntFileModel) throws Exception {
@@ -269,12 +314,21 @@ public class FileActivity extends BaseActivityWithVM<FileViewModel> {
     }
 
     private void onFileDownloaded(File destinationFile, boolean isUpdateWhenFileExists) {
+        downloadedPaths.add(destinationFile.getAbsolutePath());
+
+        if (!pendingDirents.isEmpty()) {
+            bindDirent(pendingDirents.remove(0));
+            bindFileView(direntModel.name);
+            loadData();
+            return;
+        }
 
         binding.opCancel.setEnabled(false);
 
         Intent result = new Intent();
         result.putExtra("target_file", direntModel.full_path);
         result.putExtra("destination_path", destinationFile.getAbsolutePath());
+        result.putStringArrayListExtra("destination_paths", downloadedPaths);
         result.putExtra("repo_id", repoId);
         result.putExtra("action", action);
         result.putExtra("dirent_uid", direntModel.uid);

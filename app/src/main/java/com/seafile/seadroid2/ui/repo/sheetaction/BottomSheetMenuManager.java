@@ -282,7 +282,8 @@ public class BottomSheetMenuManager {
                 long l = permissionList.stream().filter(f -> !f.download).count();
                 item.setEnabled(!(l > 0));
             } else if (item.getItemId() == R.id.share) {
-                long l = permissionList.stream().filter(f -> !f.download_external_link).count();
+                // sharing a link or sending the file itself
+                long l = permissionList.stream().filter(f -> !f.download_external_link && !f.download).count();
                 item.setEnabled(!(l > 0));
             } else if (item.getItemId() == R.id.export) {
                 long l = permissionList.stream().filter(f -> !f.download).count();
@@ -392,8 +393,9 @@ public class BottomSheetMenuManager {
                             R.id.profile);
                 }
 
+                // multi files can be shared by sending them
                 return CollectionUtils.newArrayList(
-                        R.id.share, R.id.export, R.id.open_with,
+                        R.id.export, R.id.open_with,
                         R.id.rename, R.id.save_as, R.id.profile);
             }
         }
