@@ -3,10 +3,12 @@ package com.seafile.seadroid2.ui;
 import static android.content.Context.NOTIFICATION_SERVICE;
 import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 
+import android.app.Activity;
 import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -51,6 +53,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -360,6 +363,62 @@ public class WidgetUtils {
         String packageName = weChatInfo.activityInfo.packageName;
         sendIntent.setClassName(packageName, className);
         context.startActivity(sendIntent);
+    }
+
+    /**
+     * Send local files to an app picked from the system share sheet.
+     */
+    public static void sendFiles(Context context, List<File> files) {
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+
+        ArrayList<Uri> uris = new ArrayList<>(files.size());
+        String mimeType = null;
+        for (File file : files) {
+            uris.add(FileProvider.getUriForFile(context, BuildConfig.FILE_PROVIDER_AUTHORITIES, file));
+            mimeType = mergeMimeType(mimeType, Utils.getFileMimeType(file));
+        }
+
+        Intent sendIntent = new Intent();
+        if (uris.size() == 1) {
+            sendIntent.setAction(Intent.ACTION_SEND);
+            sendIntent.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+        } else {
+            sendIntent.setAction(Intent.ACTION_SEND_MULTIPLE);
+            sendIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+        }
+        sendIntent.setType(mimeType);
+
+        // the clip data carries the read grant to the chosen app
+        ClipData clipData = ClipData.newRawUri(null, uris.get(0));
+        for (int i = 1; i < uris.size(); i++) {
+            clipData.addItem(new ClipData.Item(uris.get(i)));
+        }
+        sendIntent.setClipData(clipData);
+        sendIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        Intent chooser = Intent.createChooser(sendIntent, context.getString(R.string.file_action_send_files));
+        if (!(context instanceof Activity)) {
+            chooser.addFlags(FLAG_ACTIVITY_NEW_TASK);
+        }
+        context.startActivity(chooser);
+    }
+
+    /**
+     * The most specific mime type that covers both, e.g. image/png + image/jpeg = image/*
+     */
+    private static String mergeMimeType(String current, String next) {
+        if (current == null || TextUtils.equals(current, next)) {
+            return next;
+        }
+
+        String currentType = current.substring(0, current.indexOf('/'));
+        String nextType = next.substring(0, next.indexOf('/'));
+        if (TextUtils.equals(currentType, nextType)) {
+            return currentType + "/*";
+        }
+        return "*/*";
     }
 
     /**
